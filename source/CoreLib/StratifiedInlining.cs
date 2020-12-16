@@ -1276,6 +1276,8 @@ namespace CoreLib
             bool splitOnDemand = false;
             bool learnProofs = false;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
+            int alpha = cba.Util.HydraConfig.alpha;
+            int beta = 100 - alpha;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             string verificationAlgorithm = cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower();
@@ -1871,6 +1873,20 @@ namespace CoreLib
                 if (writeLog)
                     Console.WriteLine(clientID + " = point 4");
                 bool newCallSiteFound = false;
+                Random r = new Random();
+                int randomNumber = r.Next(100);
+                //itachi
+                if(randomNumber < alpha && verificationAlgorithm == "ucsplitparallel")
+                {
+                    verificationAlgorithm = "ucsplitparallel5";
+                    //Console.WriteLine(clientID + " => changing to UW");
+                }
+                else if(randomNumber >= alpha && verificationAlgorithm == "ucsplitparallel5")
+                {
+                    verificationAlgorithm = "ucsplitparallel";
+                    //Console.WriteLine( clientID + " => changing to OR");
+                }
+
                 if (verificationAlgorithm != "ucsplitparallel5")
                 {
                     reporter.callSitesToExpand = new List<StratifiedCallSite>();
@@ -3167,6 +3183,7 @@ namespace CoreLib
                 }
                 else
                 {
+                    //Console.WriteLine(clientID + " => new Partition");
                     if (writeLog)
                         Console.WriteLine("Request Calltree here from client {0}", clientID);
                     replyFromServer = null;
