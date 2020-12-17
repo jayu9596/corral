@@ -17,7 +17,7 @@ namespace cba.Util
         public static string hydraServerURI = null;
         public static bool startHydra = false;
         public static int maxSplitPerIteration = 1;
-        public static int alpha = 100;
+        public static int alpha = 0;
     }
 
     public static class BoogieVerify

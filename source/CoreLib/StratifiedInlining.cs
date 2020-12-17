@@ -1277,10 +1277,14 @@ namespace CoreLib
             bool learnProofs = false;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int alpha = cba.Util.HydraConfig.alpha;
-            int beta = 100 - alpha;
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             string verificationAlgorithm = cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower();
+            // Check if vanilla version is executing then set alpha to 0
+            if (verificationAlgorithm == "ucsplitparallel")
+            {
+                alpha = 0;
+            }
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1870,12 +1874,26 @@ namespace CoreLib
                     //if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
                     //    softAssumptions.Add(prover.VCExprGen.Not(cs.callSiteExpr));
                 }
+
+                if (ucore != null && ucore.Count != 0)
+                {
+
+                    foreach (StratifiedCallSite cs in attachedVC.Keys)
+                    {
+                        if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                        {
+                            CallSitesInUCore.Add(cs);
+                        }
+                    }
+                }
+
                 if (writeLog)
                     Console.WriteLine(clientID + " = point 4");
                 bool newCallSiteFound = false;
                 Random r = new Random();
                 int randomNumber = r.Next(100);
-                //itachi
+
+                //choose which algorithm to execute based on alpha value
                 if(randomNumber < alpha && verificationAlgorithm == "ucsplitparallel")
                 {
                     verificationAlgorithm = "ucsplitparallel5";
@@ -1886,7 +1904,10 @@ namespace CoreLib
                     verificationAlgorithm = "ucsplitparallel";
                     //Console.WriteLine( clientID + " => changing to OR");
                 }
+                var callsitesOR = new List<StratifiedCallSite>();
+                var callsitesUW = new List<StratifiedCallSite>();
 
+                //if (verificationAlgorithm != "" ) 
                 if (verificationAlgorithm != "ucsplitparallel5")
                 {
                     reporter.callSitesToExpand = new List<StratifiedCallSite>();
@@ -1914,79 +1935,109 @@ namespace CoreLib
 
                     if (outcome == Outcome.Errors)
                     {
-                        foreach (var scs in reporter.callSitesToExpand)
+                        if(verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
                         {
-                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-
-                            openCallSites.Remove(scs);
-                            StratifiedVC svc = null;
-                            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
-                                svc = Expand(scs);
-                            else
-                                svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                            if (svc != null)
-                            {
-                                openCallSites.UnionWith(svc.CallSites);
-                                Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-                            }
+                            callsitesOR = reporter.callSitesToExpand;
                         }
-                        if (ucore != null || ucore.Count != 0)
+                        else
                         {
-
-                            foreach (StratifiedCallSite cs in attachedVC.Keys)
-                            {
-                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
-                                {
-                                    CallSitesInUCore.Add(cs);
-                                }
-                            }
-                        }
-                    }
-                }
-                else // verificationAlgorithm == "ucsplitparallel5"
-                {
-                    if (writeLog)
-                        Console.WriteLine("Correct :)");
-                    //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
-
-                    if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
-                    {
-                        var toAdd = new HashSet<StratifiedCallSite>();
-                        var toRemove = new HashSet<StratifiedCallSite>();
-                        if (false && writeLog)
-                            Console.WriteLine("UNSAT CORE Inlined Callsites");
-                        foreach (var scs in openCallSites)
-                        {
-                            if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                            foreach (var scs in reporter.callSitesToExpand)
                             {
                                 calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
-                                if (false && writeLog)
-                                    Console.WriteLine(scs.callSite.calleeName);
-                                toRemove.Add(scs);
-                                newCallSiteFound = true;
-                                var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-                                //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                                openCallSites.Remove(scs);
+                                StratifiedVC svc = null;
+                                if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                                    svc = Expand(scs);
+                                else
+                                    svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
                                 if (svc != null)
-                                    toAdd.UnionWith(svc.CallSites);
-                            }
-                        }
-                        //Update OpenCallSites
-                        openCallSites.ExceptWith(toRemove);
-                        openCallSites.UnionWith(toAdd);
-                        if (ucore != null && ucore.Count != 0)
-                        {
-
-                            foreach (StratifiedCallSite cs in attachedVC.Keys)
-                            {
-                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
                                 {
-                                    CallSitesInUCore.Add(cs);
+                                    openCallSites.UnionWith(svc.CallSites);
+                                    Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
                                 }
                             }
                         }
                     }
                 }
-                if ((verificationAlgorithm != "ucsplitparallel5" && outcome != Outcome.Errors) || (verificationAlgorithm == "ucsplitparallel5" && !newCallSiteFound))
+
+                if( verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
+                {
+                    foreach (var scs in openCallSites)
+                    {
+                        if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                        {
+                            callsitesUW.Add(scs);
+                        }
+                    }
+                }
+
+                //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
+                if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
+                {
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    if (false && writeLog)
+                        Console.WriteLine("UNSAT CORE Inlined Callsites");
+                    foreach (var scs in openCallSites)
+                    {
+                        if (ucore.Contains("label_" + scs.callSiteExpr.ToString()))
+                        {
+                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                            if (false && writeLog)
+                                Console.WriteLine(scs.callSite.calleeName);
+                            toRemove.Add(scs);
+                            newCallSiteFound = true;
+                            var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                            if (svc != null)
+                                toAdd.UnionWith(svc.CallSites);
+                        }
+                    }
+                    //Update OpenCallSites
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+                }
+                else if (verificationAlgorithm == "ucsplitparallel6")
+                {
+                    var unionCallsites = callsitesOR.Union(callsitesUW);
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    foreach(var scs in unionCallsites)
+                    {
+                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                        toRemove.Add(scs);
+                        newCallSiteFound = true;
+                        var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                        //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                        if (svc != null)
+                            toAdd.UnionWith(svc.CallSites);
+                    }
+                    //Update OpenCallSites
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+
+                }
+                else if(verificationAlgorithm == "ucsplitparallel7")
+                {
+                    var intersectCallsites = callsitesOR.AsQueryable().Intersect(callsitesUW);
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    foreach (var scs in intersectCallsites)
+                    {
+                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                        toRemove.Add(scs);
+                        newCallSiteFound = true;
+                        var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                        //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                        if (svc != null)
+                            toAdd.UnionWith(svc.CallSites);
+                    }
+                    //Update OpenCallSites
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+                }
+
+                if (((verificationAlgorithm != "ucsplitparallel5" && verificationAlgorithm != "ucsplitparallel6" && verificationAlgorithm != "ucsplitparallel7") && outcome != Outcome.Errors) || ((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
                 {
                     if (learnProofs)
                     {
@@ -2088,6 +2139,11 @@ namespace CoreLib
                         break;
                     }
                 }
+                if(((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
+                {
+                    Console.WriteLine("Error Error !!");
+                }
+
             }
             reporter.reportTraceIfNothingToExpand = false;
             if (writeLog)
@@ -6179,6 +6235,7 @@ namespace CoreLib
             AssertCmd assertCmd = (AssertCmd)absyList[absyList.Count - 1];
             List<Block> trace = new List<Block>();
             var calleeCounterexamples = new Dictionary<TraceLocation, CalleeCounterexampleInfo>();
+
             for (int j = 0; j < absyList.Count - 1; j++)
             {
                 Block b = (Block)absyList[j];
@@ -6203,6 +6260,12 @@ namespace CoreLib
                         }
                     }
                 }
+                //######### DELETE ME #######
+                //if(callSitesToExpand.Count > 0)
+                //{
+                //    Console.WriteLine("Added sites in reporter");
+                //}
+                //######### DELETE ME #######
                 if (svc.recordProcCallSites.ContainsKey(b) && (model != null || CommandLineOptions.Clo.UseProverEvaluate))
                 {
                     foreach (StratifiedCallSite scs in svc.recordProcCallSites[b])
