@@ -23,6 +23,7 @@ namespace LocalServerInCsharp
         public static int numSplits = 0;
         public static bool startFirstJob = false;
         public static bool setKillFlag = false;
+        public static bool setTimeoutFlag = false;
         public static DateTime startTime;
         public static Queue<Tuple<int, HttpListenerContext>> clientRequestQueue = new Queue<Tuple<int, HttpListenerContext>>();
         //public static Queue<HttpListenerContext> clientRequestQueue = new Queue<HttpListenerContext>();
@@ -57,6 +58,7 @@ namespace LocalServerInCsharp
         public static double[] clientNumReset;                           //number of times a client has reset, i.e., stolen calltrees from others 
         public static double[] clientNumForwardPops;                     //number of own calltrees popped
         public static double[] clientNumBackwardPops;                    //number of stolen calltrees from a client
+        public static bool[] clientStatsSaved;
         public static DateTime[] clientCalltreeRequestReceiveTime;
         public static double smallestSplitInterval = 0;
         public static double largestSplitInterval = 0;
@@ -117,10 +119,14 @@ namespace LocalServerInCsharp
             clientNumReset = new double[maxClients];
             clientNumForwardPops = new double[maxClients];
             clientNumBackwardPops = new double[maxClients];
+            clientStatsSaved = new bool[maxClients];
             clientCalltreeRequestReceiveTime = new DateTime[maxClients];
             for (int i = 0; i < maxClients; i++)
+            {
                 clientCalltreeQueue[i] = new Deque<string>();
-            
+                clientStatsSaved[i] = false;
+            }
+
             //foreach (string s in filePaths)
             //    Console.WriteLine(s);
             //Console.WriteLine("Starting server...");
@@ -195,6 +201,7 @@ namespace LocalServerInCsharp
                     {
                         continue;            //Do Not accept any calltree from client while listener is set to kill and restart
                     }
+
                     lastClientCallAt = DateTime.Now;
                     // message is large, send reply immediately 
                     String body = new StreamReader(context.Request.InputStream).ReadToEnd();
@@ -206,6 +213,12 @@ namespace LocalServerInCsharp
                     if (writeLog)
                         Console.WriteLine("addCalltreeRequest: " + clientID + " : " + calltree);
                     //Console.ReadLine();
+
+                    if (setTimeoutFlag)
+                    {
+                        ResponseHttp(context, "SendResetTime");
+                        continue;
+                    }
                     addCalltree(context, clientID, calltree);
                     if (writeLog)
                         Console.WriteLine("Adding Calltree");
@@ -241,6 +254,12 @@ namespace LocalServerInCsharp
                 //}
                 if (msgContent != null)
                 {
+                    //TODO : ADD conditions for TIME OUT
+                    if (setTimeoutFlag && !msgContent.ContainsKey("start") && !msgContent.ContainsKey("ListenerWaitingForRestart") && !msgContent.ContainsKey("ResetTime"))
+                    {
+                        ResponseHttp(context, "SendResetTime");
+                        continue;
+                    }
                     if (setKillFlag && !msgContent.ContainsKey("start") && !msgContent.ContainsKey("ListenerWaitingForRestart"))    //Do Not accept any message from any client while listener is set to kill and restart
                         continue;
                     //Console.ReadLine();
@@ -248,7 +267,7 @@ namespace LocalServerInCsharp
                         startVerification(context);
                     else if (msgContent.ContainsKey("ListenerWaitingForRestart"))
                     {
-                        if ((DateTime.Now - startTime).TotalSeconds > timeout || setKillFlag)
+                        if ((DateTime.Now - startTime).TotalSeconds > timeout || setKillFlag || setTimeoutFlag)
                             waitingListener.Enqueue(context);
                         else
                             ResponseHttp(context, "continue");
@@ -329,6 +348,7 @@ namespace LocalServerInCsharp
                         startListenerService();*/
                      finalOutcome = "OK";
                      totalTime = (DateTime.Now - startTime).TotalSeconds;
+                    Console.WriteLine("SAFE");
                     //setKillFlag = true;
                     askForResetTime = true;
                     while(clientRequestQueue.Count > 0)
@@ -369,33 +389,46 @@ namespace LocalServerInCsharp
                     }
                 }
 
-                if (askForResetTime && numClientsResetTimeSent == maxClients)
+
+                //Console.WriteLine("TIME TAKEN : " + (DateTime.Now - startTime).TotalSeconds);
+                if ((DateTime.Now - startTime).TotalSeconds > timeout && !askForResetTime && !setKillFlag)
+                {
+                    //Console.WriteLine("TIMEOUT START");
+                    startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
+                    finalOutcome = "TIMEDOUT";
+                    Console.WriteLine("TIMED-OUT in server");
+                    askForResetTime = true;
+                    setTimeoutFlag = true;
+                    totalTime = (DateTime.Now - startTime).TotalSeconds;
+                    while (clientRequestQueue.Count > 0)
+                    {
+                        Tuple<int, HttpListenerContext> t = clientRequestQueue.Dequeue();
+                        clientIdlingTime[t.Item1] = clientIdlingTime[t.Item1] + (DateTime.Now - clientCalltreeRequestReceiveTime[t.Item1]).TotalSeconds;
+                        HttpListenerContext sendToClient = t.Item2;
+                        ResponseHttp(sendToClient, "SendResetTime");
+                    }
+                    //writeDetailedOutcome(true);
+                    //setKillFlag = true;
+                    //Console.WriteLine("HMMM SAVE stats");
+                    //ResponseHttp(waitingListener, "RESTART");
+                    //while (waitingListener.Count > 0)
+                    //ResponseHttp(waitingListener.Dequeue(), "RESTART");
+                    //Console.WriteLine("TIMEOUT END");
+                }
+
+                if ((!setTimeoutFlag && askForResetTime && numClientsResetTimeSent == maxClients) || (setTimeoutFlag && noClientLeft()))
                     setKillFlag = true;
                 //Console.ReadLine();
                 //if (receivedTimeGraph)
                 //Console.WriteLine(setKillFlag + " " + waitingListener.Count);
                 if (setKillFlag && waitingListener.Count == maxListeners)
                 {
-                    writeDetailedOutcome(false);
+                    writeDetailedOutcome(setTimeoutFlag);
                     //Console.ReadLine();
                     while (waitingListener.Count > 0)
                         ResponseHttp(waitingListener.Dequeue(), "RESTART");
                     /*if (err)
                         startListenerService();*/
-                }
-                //Console.WriteLine("TIME TAKEN : " + (DateTime.Now - startTime).TotalSeconds);
-                if ((DateTime.Now - startTime).TotalSeconds > timeout && !setKillFlag && waitingListener.Count == maxListeners)
-                {
-                    //Console.WriteLine("TIMEOUT START");
-                    startTime = DateTime.Now; //to fix the waitingListener getting disposed error. Do NOT enter more than once for one program.
-                    finalOutcome = "TIMEDOUT";
-                    totalTime = (DateTime.Now - startTime).TotalSeconds;
-                    writeDetailedOutcome(true);
-                    setKillFlag = true;
-                    //ResponseHttp(waitingListener, "RESTART");
-                    while (waitingListener.Count > 0)
-                        ResponseHttp(waitingListener.Dequeue(), "RESTART");
-                    //Console.WriteLine("TIMEOUT END");
                 }
             }
         }
@@ -579,6 +612,7 @@ namespace LocalServerInCsharp
             callTreeStack.Clear();
             clientRequestQueue.Clear();
             setKillFlag = false;
+            setTimeoutFlag = false;
             receivedTimeGraph = false;
             askForResetTime = false;
             numClientsResetTimeSent = 0;
@@ -597,8 +631,12 @@ namespace LocalServerInCsharp
             Array.Clear(clientNumForwardPops, 0, maxClients);
             Array.Clear(clientNumBackwardPops, 0, maxClients);
             Array.Clear(clientCalltreeRequestReceiveTime, 0, maxClients);
+
             for (int i = 0; i < maxClients; i++)
+            {
                 clientCalltreeQueue[i] = new Deque<string>();
+                clientStatsSaved[i] = false;
+            }
             //string programToVerify = "61883_completerequeststatuscheck_0.bpl.bpl";
             if (fileQueue.Count == 0)
             {
@@ -686,7 +724,15 @@ namespace LocalServerInCsharp
             //double communicationTimeByClient = double.Parse(parsedMessage[0]);
             //double resetTimeByClient = double.Parse(parsedMessage[1]);
             resetTime = resetTime + clientResetTime[id];
-            communicationTime = communicationTime + clientCommunicationTime[id]; 
+            communicationTime = communicationTime + clientCommunicationTime[id];
+            if (!clientStatsSaved[id])
+            {
+                clientStatsSaved[id] = true;
+                string outFile = workingFile + "_" + id.ToString() + "_stats" + ".txt";
+                string toWrite = parsedMessage[8];
+                File.WriteAllText(outFile, toWrite);
+            }
+
             numClientsResetTimeSent++;
             ResponseHttp(context, "received");
         }
@@ -703,6 +749,20 @@ namespace LocalServerInCsharp
                 }
             }
             return isNoJobLeft;
+        }
+
+        public static bool noClientLeft()
+        {
+            bool isNoClientLeft = true;
+            for (int i = 0; i < maxClients; i++)
+            {
+                if (!clientStatsSaved[i])
+                {
+                    isNoClientLeft = false;
+                    break;
+                }
+            }
+            return isNoClientLeft;
         }
 
         public static int findClientIDOfLargestQueue()

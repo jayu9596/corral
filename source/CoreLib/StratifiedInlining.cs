@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
 using System.Diagnostics;
 using Microsoft.Boogie;
 using Microsoft.Boogie.VCExprAST;
@@ -234,6 +235,8 @@ namespace CoreLib
         public DateTime splittingStartTime;
         public DateTime lastSplitAt;
         public double nextSplitInterval = 0;
+        public List<Tuple<double, int>> z3QueryTimes = new List<Tuple<double, int>>();
+        public List<int> numOfInlinedCallsites = new List<int>();
         //public Config configuration;
         /* Forced inline procs */
         HashSet<string> forceInlineProcs;
@@ -1239,11 +1242,25 @@ namespace CoreLib
                 if (splitOnDemand)
                 {
                     string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                    if (reply.Equals("SendResetTime"))
+                    {
+                        handleSendResetTime();
+                    }
                     if (reply.Equals("NO"))
                         splitFlag = 0;
                 }
             }
             return splitFlag;
+        }
+
+        void handleSendResetTime(double resetTime = 0.0)
+        {
+            string underApproxQueryTimes = string.Join("-", z3QueryTimes.Where(tup => tup.Item2 == 0).Select(tup => tup.Item1));
+            string overApproxQueryTimes = string.Join("-", z3QueryTimes.Where(tup => tup.Item2 == 1).Select(tup => tup.Item1));
+            string AllQueryTimes = string.Join("-", z3QueryTimes.Select(tup => tup.Item1));
+            string finalStats = underApproxQueryTimes + "\n" + overApproxQueryTimes + "\n" + AllQueryTimes + "\n" + string.Join("-", numOfInlinedCallsites);
+            sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}", clientID,
+                communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime, finalStats));
         }
 
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
@@ -1835,6 +1852,7 @@ namespace CoreLib
                 DateTime uqStartTime = DateTime.Now;
                 outcome = CheckVC(reporter);
                 Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
+                z3QueryTimes.Add(Tuple.Create((DateTime.Now - uqStartTime).TotalSeconds, 0));
                 if (writeLog)
                     Console.WriteLine("point 0.2");
 
@@ -1897,12 +1915,12 @@ namespace CoreLib
                 if(randomNumber < alpha && verificationAlgorithm == "ucsplitparallel")
                 {
                     verificationAlgorithm = "ucsplitparallel5";
-                    //Console.WriteLine(clientID + " => changing to UW");
+                    Console.WriteLine(clientID + " => changing to UW");
                 }
                 else if(randomNumber >= alpha && verificationAlgorithm == "ucsplitparallel5")
                 {
                     verificationAlgorithm = "ucsplitparallel";
-                    //Console.WriteLine( clientID + " => changing to OR");
+                    Console.WriteLine( clientID + " => changing to OR");
                 }
                 var callsitesOR = new List<StratifiedCallSite>();
                 var callsitesUW = new List<StratifiedCallSite>();
@@ -1915,6 +1933,7 @@ namespace CoreLib
                     DateTime oqStartTime = DateTime.Now;
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
+                    z3QueryTimes.Add(Tuple.Create((DateTime.Now - oqStartTime).TotalSeconds, 1));
                     Debug.WriteLine(outcome.ToString());
                     //Pop();
                     if (outcome != Outcome.Correct && outcome != Outcome.Errors)
@@ -1941,6 +1960,8 @@ namespace CoreLib
                         }
                         else
                         {
+                            //Console.WriteLine("call-sites inlined OR : " + reporter.callSitesToExpand.Count());
+                            numOfInlinedCallsites.Add(reporter.callSitesToExpand.Count());
                             foreach (var scs in reporter.callSitesToExpand)
                             {
                                 calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -1996,10 +2017,14 @@ namespace CoreLib
                     //Update OpenCallSites
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
+                    //Console.WriteLine("call-sites inlined UW : " + toRemove.Count());
+                    numOfInlinedCallsites.Add(toRemove.Count());
                 }
                 else if (verificationAlgorithm == "ucsplitparallel6")
                 {
                     var unionCallsites = callsitesOR.Union(callsitesUW);
+                    //Console.WriteLine("call-sites inlined Union : " + unionCallsites.Count());
+                    numOfInlinedCallsites.Add(unionCallsites.Count());
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach(var scs in unionCallsites)
@@ -2012,14 +2037,16 @@ namespace CoreLib
                         if (svc != null)
                             toAdd.UnionWith(svc.CallSites);
                     }
+
                     //Update OpenCallSites
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
-
                 }
                 else if(verificationAlgorithm == "ucsplitparallel7")
                 {
                     var intersectCallsites = callsitesOR.AsQueryable().Intersect(callsitesUW);
+                    //Console.WriteLine("call-sites inlined Intersect : " + intersectCallsites.Count());
+                    numOfInlinedCallsites.Add(intersectCallsites.Count());
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach (var scs in intersectCallsites)
@@ -2039,6 +2066,7 @@ namespace CoreLib
 
                 if (((verificationAlgorithm != "ucsplitparallel5" && verificationAlgorithm != "ucsplitparallel6" && verificationAlgorithm != "ucsplitparallel7") && outcome != Outcome.Errors) || ((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
                 {
+
                     if (learnProofs)
                     {
                         if (outcome == Outcome.Correct)
@@ -2074,6 +2102,10 @@ namespace CoreLib
                     }
                     //Console.ReadLine();
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
+                    if (replyFromServer.Equals("SendResetTime"))
+                    {
+                        handleSendResetTime();
+                    }
                     if (replyFromServer.Equals("YES"))
                     //if (false)
                     {
@@ -2087,6 +2119,8 @@ namespace CoreLib
                         {
                             if (decisions.Count == 0)
                             {
+                                Console.WriteLine(clientID + " => LocalStackEmpty");
+                                Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                                 doneBT = true;
                                 break;
                             }
@@ -2113,7 +2147,12 @@ namespace CoreLib
 
                         Push();
                         backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, calltreeToSend));
-
+                        //if (((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
+                        //{
+                        //    Console.WriteLine(clientID + " => New Decision");
+                        //}
+                        Console.WriteLine(clientID + " => Popped Fom Local Stack");
+                        Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
                             // Block
@@ -2135,14 +2174,17 @@ namespace CoreLib
                     }
                     else
                     {
+                        if (writeLog)
+                        {
+                            Console.WriteLine(clientID + " => CantPopFromLocalStack");
+                            Console.WriteLine("reply from server => " + replyFromServer);
+                            Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
+                        }
                         calltreeToSend = "";
                         break;
                     }
                 }
-                if(((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
-                {
-                    Console.WriteLine("Error Error !!");
-                }
+
 
             }
             reporter.reportTraceIfNothingToExpand = false;
@@ -2222,6 +2264,11 @@ namespace CoreLib
             DateTime communicationStartTime = DateTime.Now;
             var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
             string replyFromServer = rep.Content.ReadAsStringAsync().Result;
+            if (replyFromServer.Equals("SendResetTime"))
+            {
+                handleSendResetTime();
+                replyFromServer = "0.0";
+            }
             lastSplitAt = DateTime.Now;
             nextSplitInterval = double.Parse(replyFromServer);
             communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
@@ -3189,12 +3236,20 @@ namespace CoreLib
             if (writeLog)
                 Console.WriteLine("Requesting ID");
             replyFromServer = sendRequestToServer("requestID", "What Is My ID");
+            if (replyFromServer.Equals("SendResetTime"))
+            {
+                handleSendResetTime();
+            }
             clientID = replyFromServer;
             if (writeLog)
                 Console.WriteLine("Client ID is : " + clientID);
             if (writeLog)
                 Console.WriteLine("Start First Job?");
             replyFromServer = sendRequestToServer("startFirstJob", "Start Job 0?");
+            if (replyFromServer.Equals("SendResetTime"))
+            {
+                handleSendResetTime();
+            }
             if (writeLog)
                 Console.WriteLine("Reply : " + replyFromServer);
             if (replyFromServer.Equals("YES"))
@@ -3258,10 +3313,12 @@ namespace CoreLib
                     }
                     if (replyFromServer.Equals("SendResetTime"))
                     {
-                        //double timeSpentInProverCalls = (double)stats.time / Stopwatch.Frequency;
-                        sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID,
-                            communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
+                        //Console.WriteLine("Change here in VerifyImplementationHydra");
+                        //TODO: Save all the stats in a file
+                        //List<int> filtered = vals.Where(x => x > 0).ToList();
+                        handleSendResetTime();
                     }
+
                     /*if (replyFromServer.Equals("DONE") || replyFromServer.Equals("kill"))
                     {
                         CallTree = null;
@@ -3660,7 +3717,11 @@ namespace CoreLib
                 if (writeLog)
                     Console.WriteLine("HERE1");
                 if (outcome == Outcome.Correct)
+                {
+                    //Console.WriteLine("OK");
+                    //Console.WriteLine(z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                     replyFromServer = sendRequestToServer("outcome", "OK");
+                }
                 else if (outcome == Outcome.Errors)
                 {
                     cba.Util.HydraConfig.startHydra = false;
@@ -3669,6 +3730,11 @@ namespace CoreLib
                 }
                 else
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
+                if (replyFromServer.Equals("SendResetTime"))
+                {
+                    handleSendResetTime();
+                }
+                //Console.WriteLine("main reply => " + replyFromServer);
                 if (writeLog)
                     Console.WriteLine("HERE2");
                 if (writeLog)
@@ -3676,7 +3742,9 @@ namespace CoreLib
                 if (writeLog)
                     Console.WriteLine("HERE4");
                 if (replyFromServer.Equals("kill") || replyFromServer.Equals("DONE"))
+                {
                     continueVerification = false;
+                }
             }
             if (makeTimeGraph)
             {
@@ -3702,7 +3770,11 @@ namespace CoreLib
                 if (writeLog)
                     Console.WriteLine(sendTimeGraph);
                 //Console.ReadLine();
-                sendRequestToServer("TimeGraph", sendTimeGraph);
+                var reply = sendRequestToServer("TimeGraph", sendTimeGraph);
+                if (reply.Equals("SendResetTime"))
+                {
+                    handleSendResetTime(resetTime);
+                }
             }
             //Console.ReadLine();
             return outcome;
