@@ -1242,10 +1242,10 @@ namespace CoreLib
                 if (splitOnDemand)
                 {
                     string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
-                    if (reply.Equals("SendResetTime"))
-                    {
-                        handleSendResetTime();
-                    }
+                    //if (reply.Equals("SendResetTime"))
+                    //{
+                    //    handleSendResetTime();
+                    //}
                     if (reply.Equals("NO"))
                         splitFlag = 0;
                 }
@@ -1255,12 +1255,12 @@ namespace CoreLib
 
         void handleSendResetTime(double resetTime = 0.0)
         {
-            string underApproxQueryTimes = string.Join("-", z3QueryTimes.Where(tup => tup.Item2 == 0).Select(tup => tup.Item1));
-            string overApproxQueryTimes = string.Join("-", z3QueryTimes.Where(tup => tup.Item2 == 1).Select(tup => tup.Item1));
-            string AllQueryTimes = string.Join("-", z3QueryTimes.Select(tup => tup.Item1));
-            string finalStats = underApproxQueryTimes + "\n" + overApproxQueryTimes + "\n" + AllQueryTimes + "\n" + string.Join("-", numOfInlinedCallsites);
-            sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7},{8}", clientID,
-                communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime, finalStats));
+            //string underApproxQueryTimes = string.Join("-", z3QueryTimes.Where(tup => tup.Item2 == 0).Select(tup => tup.Item1));
+            //string overApproxQueryTimes = string.Join("-", z3QueryTimes.Where(tup => tup.Item2 == 1).Select(tup => tup.Item1));
+            //string AllQueryTimes = string.Join("-", z3QueryTimes.Select(tup => tup.Item1));
+            //string finalStats = underApproxQueryTimes + "\n" + overApproxQueryTimes + "\n" + AllQueryTimes + "\n" + string.Join("-", numOfInlinedCallsites);
+            sendRequestToServer("ResetTime", string.Format("{0},{1},{2},{3},{4},{5},{6},{7}", clientID,
+                communicationTime, resetTime, stats.numInlined, stats.calls, proverTime, inliningTime, splittingTime));
         }
 
         public Outcome UnSatCoreSplitStyleParallel(HashSet<StratifiedCallSite> openCallSites,
@@ -1397,7 +1397,7 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5")
+                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1450,7 +1450,7 @@ namespace CoreLib
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5")
+                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
                             {
                                 //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                 var score = 0;
@@ -1822,58 +1822,81 @@ namespace CoreLib
                 splittingTime = splittingTime + (DateTime.Now - splittingStartTime).TotalSeconds;
                 ucore = null;
                 boundHit = false;
+
+                var toFile = cba.Util.HydraConfig.fileName + "_stats.txt";
+
+
                 // underapproximate query
                 //Console.WriteLine("Underapprox Begin");
-                Push();
-                foreach (StratifiedCallSite cs in openCallSites)
+                if (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
                 {
-                    //Console.WriteLine(GetPersistentID(cs));
-                    if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
-                        (CommandLineOptions.Clo.StackDepthBound > 0 &&
-                        StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                    Push();
+                    foreach (StratifiedCallSite cs in openCallSites)
                     {
-                        prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
-                        procsHitRecBound.Add(cs.callSite.calleeName);
-                        boundHit = true;
+                        //Console.WriteLine(GetPersistentID(cs));
+                        if (HasExceededRecursionDepth(cs, CommandLineOptions.Clo.RecursionBound) ||
+                            (CommandLineOptions.Clo.StackDepthBound > 0 &&
+                            StackDepth(cs) > CommandLineOptions.Clo.StackDepthBound))
+                        {
+                            prover.Assert(cs.callSiteExpr, false); // Do assert without the label (not caught in UNSAT core)
+                            procsHitRecBound.Add(cs.callSite.calleeName);
+                            boundHit = true;
+                        }
+                        // Non-uniform unfolding
+                        if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
+                            Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+
+                        prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
+
+                        continue;
+
                     }
-                    // Non-uniform unfolding
-                    if (BoogieVerify.options.NonUniformUnfolding && RecursionDepth(cs) > 1)
-                        Debug.Assert(false, "Non-uniform unfolding not handled in UW!");
+                    //Console.WriteLine("Underapprox end");
+                    reporter.reportTrace = true;
+                    if (writeLog)
+                        Console.WriteLine("point 0.1");
+                    DateTime uqStartTime = DateTime.Now;
+                    outcome = CheckVC(reporter);
+                    Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
+                    var toWrite = (DateTime.Now - uqStartTime).TotalSeconds.ToString() + ",";
+                    File.AppendAllText(toFile, toWrite);
+                    z3QueryTimes.Add(Tuple.Create((DateTime.Now - uqStartTime).TotalSeconds, 0));
+                    if (writeLog)
+                        Console.WriteLine("point 0.2");
 
-                    prover.Assert(cs.callSiteExpr, false, name: "label_" + cs.callSiteExpr.ToString());
-
-                    continue;
-
+                    if (outcome == Outcome.Errors)
+                    {
+                        //Console.WriteLine("EtUC");
+                        //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
+                        if (makeTimeGraph)
+                            timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                        //sendRequestToServer("outcome", "NOK");
+                        break; // done (error found)
+                    }
+                    if(writeLog)
+                        Console.WriteLine("UW outcome => " + outcome.ToString());
+                    if (outcome != Outcome.Errors && outcome != Outcome.Correct)
+                    {
+                        Console.WriteLine("BREAKING HERE");
+                        if (makeTimeGraph)
+                            timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
+                        break; // done (T/O)
+                    }
+                    if (writeLog)
+                        Console.WriteLine("point 1");
+                    if (outcome == Outcome.Correct)
+                    {
+                        ucore = prover.UnsatCore();
+                        if(ucore == null)
+                        {
+                            if (writeLog)
+                                Console.WriteLine("UNSAT but no unsat core is null");
+                        }
+                    }
+                    if (writeLog)
+                        Console.WriteLine("point 2");
+                    Pop();
                 }
-                //Console.WriteLine("Underapprox end");
-                reporter.reportTrace = true;
-                if (writeLog)
-                    Console.WriteLine("point 0.1");
-                DateTime uqStartTime = DateTime.Now;
-                outcome = CheckVC(reporter);
-                Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
-                z3QueryTimes.Add(Tuple.Create((DateTime.Now - uqStartTime).TotalSeconds, 0));
-                if (writeLog)
-                    Console.WriteLine("point 0.2");
-
-                if (outcome == Outcome.Errors)
-                {
-                    //Console.WriteLine("EtUC");
-                    //timeGraph.AddEdgeDone(decisions.Count == 0 ? "" : decisions.Peek().decisionType.ToString());
-                    if (makeTimeGraph)
-                        timeGraph.AddEdge(parentNodeInTimegraph, childNodeInTimegraph, "split", (DateTime.Now - timeGraph.startTime).TotalSeconds);
-                    //sendRequestToServer("outcome", "NOK");
-                    break; // done (error found)
-                }
-                if (writeLog)
-                    Console.WriteLine("point 1");
-                if (outcome == Outcome.Correct)
-                {
-                    ucore = prover.UnsatCore();
-                }
-                if (writeLog)
-                    Console.WriteLine("point 2");
-                Pop();
                 if (writeLog)
                     Console.WriteLine("point 3");
                 //Push();
@@ -1924,7 +1947,8 @@ namespace CoreLib
                 }
                 var callsitesOR = new List<StratifiedCallSite>();
                 var callsitesUW = new List<StratifiedCallSite>();
-
+                if (writeLog)
+                    Console.WriteLine(clientID + " = point 5");
                 //if (verificationAlgorithm != "" ) 
                 if (verificationAlgorithm != "ucsplitparallel5")
                 {
@@ -1934,6 +1958,8 @@ namespace CoreLib
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                     z3QueryTimes.Add(Tuple.Create((DateTime.Now - oqStartTime).TotalSeconds, 1));
+                    var toWrite = (DateTime.Now - oqStartTime).TotalSeconds.ToString() + ",";
+                    File.AppendAllText(toFile, toWrite);
                     Debug.WriteLine(outcome.ToString());
                     //Pop();
                     if (outcome != Outcome.Correct && outcome != Outcome.Errors)
@@ -1962,6 +1988,8 @@ namespace CoreLib
                         {
                             //Console.WriteLine("call-sites inlined OR : " + reporter.callSitesToExpand.Count());
                             numOfInlinedCallsites.Add(reporter.callSitesToExpand.Count());
+                            var splits = reporter.callSitesToExpand.Count().ToString() + "\n";
+                            File.AppendAllText(toFile, splits);
                             foreach (var scs in reporter.callSitesToExpand)
                             {
                                 calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -1981,7 +2009,8 @@ namespace CoreLib
                     }
                 }
 
-                if( verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
+                //Add all open callsites in unsat core to list
+                if(ucore != null && verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
                 {
                     foreach (var scs in openCallSites)
                     {
@@ -1991,13 +2020,14 @@ namespace CoreLib
                         }
                     }
                 }
-
+                if (writeLog)
+                    Console.WriteLine(clientID + " = point 6");
                 //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
                 if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
                 {
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
-                    if (false && writeLog)
+                    if (writeLog)
                         Console.WriteLine("UNSAT CORE Inlined Callsites");
                     foreach (var scs in openCallSites)
                     {
@@ -2019,12 +2049,16 @@ namespace CoreLib
                     openCallSites.UnionWith(toAdd);
                     //Console.WriteLine("call-sites inlined UW : " + toRemove.Count());
                     numOfInlinedCallsites.Add(toRemove.Count());
+                    var splits = toRemove.Count().ToString() + "\n";
+                    File.AppendAllText(toFile, splits);
                 }
-                else if (verificationAlgorithm == "ucsplitparallel6")
+                else if (verificationAlgorithm == "ucsplitparallel6") // Union of OR and UW open call sites
                 {
                     var unionCallsites = callsitesOR.Union(callsitesUW);
                     //Console.WriteLine("call-sites inlined Union : " + unionCallsites.Count());
                     numOfInlinedCallsites.Add(unionCallsites.Count());
+                    var splits = unionCallsites.Count().ToString() + "\n";
+                    File.AppendAllText(toFile, splits);
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach(var scs in unionCallsites)
@@ -2037,16 +2071,39 @@ namespace CoreLib
                         if (svc != null)
                             toAdd.UnionWith(svc.CallSites);
                     }
-
+                    if (!newCallSiteFound)
+                    {
+                        Console.WriteLine("Union new callsites not found!");
+                        int lenOR = callsitesOR.Count();
+                        int lenUW = callsitesUW.Count();
+                        if (lenOR == 0 && lenUW == 0)
+                        {
+                            Console.WriteLine("Both NULL");
+                        }
+                        else if (lenOR == 0)
+                        {
+                            Console.WriteLine("only OR is NULL");
+                        }
+                        else if (lenUW == 0)
+                        {
+                            Console.WriteLine("only UW is NULL");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Both are NOT NULL");
+                        }
+                    }
                     //Update OpenCallSites
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
                 }
-                else if(verificationAlgorithm == "ucsplitparallel7")
+                else if(verificationAlgorithm == "ucsplitparallel7")  // Intersection of OR and UW open call sites
                 {
                     var intersectCallsites = callsitesOR.AsQueryable().Intersect(callsitesUW);
                     //Console.WriteLine("call-sites inlined Intersect : " + intersectCallsites.Count());
                     numOfInlinedCallsites.Add(intersectCallsites.Count());
+                    var splits = intersectCallsites.Count().ToString() + "\n";
+                    File.AppendAllText(toFile, splits);
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach (var scs in intersectCallsites)
@@ -2059,12 +2116,46 @@ namespace CoreLib
                         if (svc != null)
                             toAdd.UnionWith(svc.CallSites);
                     }
+                    if (!newCallSiteFound)
+                    {
+                        Console.WriteLine("Intersection new callsites not found!");
+                        int lenOR = callsitesOR.Count();
+                        int lenUW = callsitesUW.Count();
+                        if(lenOR == 0 && lenUW == 0)
+                        {
+                            Console.WriteLine("Both NULL");
+                        }else if(lenOR == 0)
+                        {
+                            Console.WriteLine("only OR is NULL");
+                        }else if(lenUW == 0)
+                        {
+                            Console.WriteLine("only UW is NULL");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Both NOT NULL");
+                        }
+                    }
                     //Update OpenCallSites
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
                 }
-
-                if (((verificationAlgorithm != "ucsplitparallel5" && verificationAlgorithm != "ucsplitparallel6" && verificationAlgorithm != "ucsplitparallel7") && outcome != Outcome.Errors) || ((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
+                if (writeLog)
+                {
+                    Console.WriteLine("verificationAlgorithm => " + verificationAlgorithm);
+                    Console.WriteLine("outcome " + outcome.ToString());
+                    Console.WriteLine("callsitesUW.Count() => " + callsitesUW.Count());
+                    Console.WriteLine("new callsites found => " + newCallSiteFound);
+                }
+                //if (((verificationAlgorithm != "ucsplitparallel5" && verificationAlgorithm != "ucsplitparallel6" && verificationAlgorithm != "ucsplitparallel7") && outcome != Outcome.Errors) || ((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
+                // WHEN partition is SAFE : get new call tree
+                if (verificationAlgorithm == "ucsplitparallel" && outcome != Outcome.Errors // OR and outcome == UNSAT
+                    || (verificationAlgorithm == "ucsplitparallel5" && outcome == Outcome.Correct && callsitesUW.Count() == 0) // UW and outcome = UNSAT and no new open-callsites found in unsat core
+                    || (verificationAlgorithm == "ucsplitparallel6" && outcome != Outcome.Errors) // case OR with union
+                    || (verificationAlgorithm == "ucsplitparallel6" && callsitesUW.Count() == 0) // case UW with union
+                    || (verificationAlgorithm == "ucsplitparallel7" && outcome != Outcome.Errors) // case OR with intersection
+                    || (verificationAlgorithm == "ucsplitparallel7" && callsitesUW.Count() == 0) // case UW with intersection
+                )
                 {
 
                     if (learnProofs)
@@ -2102,10 +2193,10 @@ namespace CoreLib
                     }
                     //Console.ReadLine();
                     replyFromServer = sendRequestToServer("popFromLocalStack", clientID);
-                    if (replyFromServer.Equals("SendResetTime"))
-                    {
-                        handleSendResetTime();
-                    }
+                    //if (replyFromServer.Equals("SendResetTime"))
+                    //{
+                    //    handleSendResetTime();
+                    //}
                     if (replyFromServer.Equals("YES"))
                     //if (false)
                     {
@@ -2264,11 +2355,11 @@ namespace CoreLib
             DateTime communicationStartTime = DateTime.Now;
             var rep = callServer.PostAsync(serverUri.Uri, tmp).Result;
             string replyFromServer = rep.Content.ReadAsStringAsync().Result;
-            if (replyFromServer.Equals("SendResetTime"))
-            {
-                handleSendResetTime();
-                replyFromServer = "0.0";
-            }
+            //if (replyFromServer.Equals("SendResetTime"))
+            //{
+            //    handleSendResetTime();
+            //    replyFromServer = "0.0";
+            //}
             lastSplitAt = DateTime.Now;
             nextSplitInterval = double.Parse(replyFromServer);
             communicationTime = communicationTime + (DateTime.Now - communicationStartTime).TotalSeconds;
@@ -3236,20 +3327,20 @@ namespace CoreLib
             if (writeLog)
                 Console.WriteLine("Requesting ID");
             replyFromServer = sendRequestToServer("requestID", "What Is My ID");
-            if (replyFromServer.Equals("SendResetTime"))
-            {
-                handleSendResetTime();
-            }
+            //if (replyFromServer.Equals("SendResetTime"))
+            //{
+            //    handleSendResetTime();
+            //}
             clientID = replyFromServer;
             if (writeLog)
                 Console.WriteLine("Client ID is : " + clientID);
             if (writeLog)
                 Console.WriteLine("Start First Job?");
             replyFromServer = sendRequestToServer("startFirstJob", "Start Job 0?");
-            if (replyFromServer.Equals("SendResetTime"))
-            {
-                handleSendResetTime();
-            }
+            //if (replyFromServer.Equals("SendResetTime"))
+            //{
+            //    handleSendResetTime();
+            //}
             if (writeLog)
                 Console.WriteLine("Reply : " + replyFromServer);
             if (replyFromServer.Equals("YES"))
@@ -3649,7 +3740,7 @@ namespace CoreLib
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
                 }*/
-                else if ((cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel5")) && !di.disabled && cba.Util.HydraConfig.startHydra)
+                else if ((cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel") || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel5") || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel6") || cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower().StartsWith("ucsplitparallel7")) && !di.disabled && cba.Util.HydraConfig.startHydra)
                 {
                     outcome = UnSatCoreSplitStyleParallel(openCallSites, reporter, timeGraph, prevMustAsserted,
                         backtrackingPoints, decisions);
@@ -3730,10 +3821,10 @@ namespace CoreLib
                 }
                 else
                     replyFromServer = sendRequestToServer("outcome", "REACHEDBOUND");
-                if (replyFromServer.Equals("SendResetTime"))
-                {
-                    handleSendResetTime();
-                }
+                //if (replyFromServer.Equals("SendResetTime"))
+                //{
+                //    handleSendResetTime();
+                //}
                 //Console.WriteLine("main reply => " + replyFromServer);
                 if (writeLog)
                     Console.WriteLine("HERE2");
@@ -3771,10 +3862,10 @@ namespace CoreLib
                     Console.WriteLine(sendTimeGraph);
                 //Console.ReadLine();
                 var reply = sendRequestToServer("TimeGraph", sendTimeGraph);
-                if (reply.Equals("SendResetTime"))
-                {
-                    handleSendResetTime(resetTime);
-                }
+                //if (reply.Equals("SendResetTime"))
+                //{
+                //    handleSendResetTime(resetTime);
+                //}
             }
             //Console.ReadLine();
             return outcome;

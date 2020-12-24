@@ -99,6 +99,7 @@ namespace cba
         public bool runFullHydra { get; private set; }
         public int maxSplitPerIteration { get; private set; }
         public int alpha { get; private set; }
+        public string fileName { get; private set; }
 
         public string boogieOpts;
         public bool cadeTiming { get; private set; }
@@ -208,12 +209,12 @@ namespace cba
 
             Configs config = new Configs();
             config.inputFile = inputFile;
-
+            cba.Util.HydraConfig.fileName = inputFile;
             foreach (var flag in flags)
             {
                 config.parseFlag(flag);
             }
-
+            
             // Concatenate include files
             if (config.includeFiles.Count != 0)
             {
@@ -299,6 +300,7 @@ namespace cba
             runFullHydra = false;
             maxSplitPerIteration = 1;
             alpha = 100;
+            fileName = "wrong";
             refinementAlgo = "tttt";
             noCallTreeReuse = false;
             cadeTiming = false;
