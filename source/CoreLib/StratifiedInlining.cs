@@ -1990,6 +1990,10 @@ namespace CoreLib
                             numOfInlinedCallsites.Add(reporter.callSitesToExpand.Count());
                             var splits = reporter.callSitesToExpand.Count().ToString() + "\n";
                             File.AppendAllText(toFile, splits);
+                            if(reporter.callSitesToExpand.Count == 0)
+                            {
+                                break;
+                            }
                             foreach (var scs in reporter.callSitesToExpand)
                             {
                                 calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
@@ -2010,7 +2014,7 @@ namespace CoreLib
                 }
 
                 //Add all open callsites in unsat core to list
-                if(ucore != null && verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
+                if(ucore != null && (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7"))
                 {
                     foreach (var scs in openCallSites)
                     {
