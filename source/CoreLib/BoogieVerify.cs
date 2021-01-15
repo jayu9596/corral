@@ -18,6 +18,8 @@ namespace cba.Util
         public static bool startHydra = false;
         public static int maxSplitPerIteration = 1;
         public static int alpha = 0;
+        public static double lambda = 0;
+        public static int initialUWIterations = 0;
         public static string fileName = "wrong";
     }
 

@@ -99,6 +99,8 @@ namespace cba
         public bool runFullHydra { get; private set; }
         public int maxSplitPerIteration { get; private set; }
         public int alpha { get; private set; }
+        public double lambda { get; private set; }
+        public int initialUWIterations { get; private set; }
         public string fileName { get; private set; }
 
         public string boogieOpts;
@@ -299,7 +301,9 @@ namespace cba
             printFinalProgOnly = false;
             runFullHydra = false;
             maxSplitPerIteration = 1;
-            alpha = 100;
+            alpha = 0;
+            lambda = 0.01;
+            initialUWIterations = 20;
             fileName = "wrong";
             refinementAlgo = "tttt";
             noCallTreeReuse = false;
@@ -579,6 +583,18 @@ namespace cba
                 var split = flag.Split(sep);
                 alpha = Int32.Parse(split[1]);
                 cba.Util.HydraConfig.alpha = alpha;
+            }
+            else if (flag.StartsWith("/lambda"))
+            {
+                var split = flag.Split(sep);
+                lambda = Double.Parse(split[1]);
+                cba.Util.HydraConfig.lambda = lambda;
+            }
+            else if (flag.StartsWith("/initialUWIterations"))
+            {
+                var split = flag.Split(sep);
+                initialUWIterations = Int32.Parse(split[1]);
+                cba.Util.HydraConfig.initialUWIterations = initialUWIterations;
             }
             else if (flag.StartsWith("/hydraServerURI:"))
             {
