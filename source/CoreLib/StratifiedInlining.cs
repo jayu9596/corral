@@ -1550,7 +1550,7 @@ namespace CoreLib
                             lastCalltreeSent = calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",";
                             if (isAlphaDecay)
                                 lastCalltreeSent = lastCalltreeSent + totalIterationsForAlpha.ToString() + ",";
-                            replyFromServer = sendCalltreeToServer(calltreeToSend + "MUSTREACH," + GetPersistentID(scs) + ",");
+                            replyFromServer = sendCalltreeToServer(lastCalltreeSent);
                             backtrackingPoints.Push(SiState.SaveState(this, openCallSites, previousSplitSites, lastCalltreeSent));
                             prevMustAsserted.Push(new List<Tuple<StratifiedVC, Block>>());
                             decisions.Push(new Decision(DecisionType.BLOCK, 0, scs, totalIterationsForAlpha));
@@ -1844,7 +1844,7 @@ namespace CoreLib
                     int randomNumber = r.Next(100);
                     totalIterationsForAlpha += 1;
                     alpha = (int)(100 * Math.Exp(-1 * lambda * Math.Max(0, totalIterationsForAlpha - initialUWIterations)));
-                    Console.WriteLine(totalIterationsForAlpha + " => " + alpha);
+                    //Console.WriteLine(totalIterationsForAlpha + " => " + alpha);
                     //choose which algorithm to execute based on alpha value
                     if (randomNumber < alpha && verificationAlgorithm != "ucsplitparallel5")
                     {
@@ -3646,7 +3646,7 @@ namespace CoreLib
                 // Inline receivedCalltree and push split decisions
                 if (receivedCalltree != null)
                 {
-                    //Console.WriteLine(receivedCalltree);
+                    //Console.WriteLine(clientID + " => calltree: " + receivedCalltree);
                     calltreeToSend = receivedCalltree;
                     string callsiteToInline = "";
                     int mode = 0;
@@ -3881,10 +3881,11 @@ namespace CoreLib
                 #endregion
                 if (writeLog)
                     Console.WriteLine("HERE1");
+                Console.WriteLine(clientID + " => Outcome : " + outcome.ToString());
+                Console.WriteLine(clientID + " =>: " + totalIterationsUW + " <= UW iterations OR => " + totalIterationsOR);
                 if (outcome == Outcome.Correct)
                 {
                     //Console.WriteLine("OK");
-                    //Console.WriteLine(z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                     replyFromServer = sendRequestToServer("outcome", "OK");
                 }
                 else if (outcome == Outcome.Errors)
