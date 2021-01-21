@@ -1866,7 +1866,7 @@ namespace CoreLib
                 var callsitesUW = new List<StratifiedCallSite>();
                 // underapproximate query
                 //Console.WriteLine("Underapprox Begin");
-                if (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8")
+                if (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel")
                 {
                     Push();
                     foreach (StratifiedCallSite cs in openCallSites)
