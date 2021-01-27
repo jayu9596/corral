@@ -2096,6 +2096,7 @@ namespace CoreLib
                     openCallSites.UnionWith(toAdd);
                     //Console.WriteLine("call-sites inlined UW : " + toRemove.Count());
                     numOfInlinedCallsites.Add(toRemove.Count());
+                    //Console.WriteLine(clientID + " => inlined UW : " + toRemove.Count());
                     var splits = toRemove.Count().ToString() + "\n";
                     //File.AppendAllText(toFile, splits);
                 }
@@ -2279,7 +2280,8 @@ namespace CoreLib
                             break;
 
                         topState.ApplyState(this, ref openCallSites, ref previousSplitSites, ref calltreeToSend);
-                        Console.WriteLine(totalIterationsForAlpha + " new total iteration => " + topDecision.totalIterationsForAlpha);
+                        if (isAlphaDecay)
+                            Console.WriteLine(clientID +" => " + totalIterationsForAlpha + " iterations changed to => " + topDecision.totalIterationsForAlpha);
                         if (isAlphaDecay)
                             totalIterationsForAlpha = topDecision.totalIterationsForAlpha;
                         //timeGraph.Pop(npops - 1);
@@ -3777,7 +3779,7 @@ namespace CoreLib
                         parentNodeInTimegraph = timeGraphCurrentState.Item1;
                         childNodeInTimegraph = timeGraphCurrentState.Item2;
                     }
-                    Console.WriteLine(" new call tree total iteration => " + totalIterationsForAlpha);
+                    Console.WriteLine(clientID+ " => new call tree total iteration : " + totalIterationsForAlpha);
                 }
                 resetTime = resetTime + (DateTime.Now - resetStart).TotalSeconds;
                 // Stratified Search
