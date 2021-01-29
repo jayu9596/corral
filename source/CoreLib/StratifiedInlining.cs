@@ -1302,6 +1302,7 @@ namespace CoreLib
             string lastCalltreeSent = string.Empty;
             bool splitOnDemand = false;
             bool learnProofs = false;
+            bool writeToStatsFile = true;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
             int alpha = cba.Util.HydraConfig.alpha;
             double lambda = cba.Util.HydraConfig.lambda;
@@ -1896,8 +1897,9 @@ namespace CoreLib
                     DateTime uqStartTime = DateTime.Now;
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
-                    var toWrite = (DateTime.Now - uqStartTime).TotalSeconds.ToString() + ",";
-                    //File.AppendAllText(toFile, toWrite);
+                    var toWrite = "UWQ," + (DateTime.Now - uqStartTime).TotalSeconds.ToString() + ",";
+                    if (writeToStatsFile)
+                        File.AppendAllText(toFile, toWrite);
                     z3QueryTimes.Add(Tuple.Create((DateTime.Now - uqStartTime).TotalSeconds, 0));
                     if (writeLog)
                         Console.WriteLine("point 0.2");
@@ -1979,8 +1981,9 @@ namespace CoreLib
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                     z3QueryTimes.Add(Tuple.Create((DateTime.Now - oqStartTime).TotalSeconds, 1));
-                    var toWrite = (DateTime.Now - oqStartTime).TotalSeconds.ToString() + ",";
-                    //File.AppendAllText(toFile, toWrite);
+                    var toWrite = "ORQ," + (DateTime.Now - oqStartTime).TotalSeconds.ToString() + ",";
+                    if (writeToStatsFile)
+                        File.AppendAllText(toFile, toWrite);
                     Debug.WriteLine(outcome.ToString());
                     //Pop();
                     if (outcome != Outcome.Correct && outcome != Outcome.Errors)
@@ -2010,7 +2013,8 @@ namespace CoreLib
                             //Console.WriteLine("call-sites inlined OR : " + reporter.callSitesToExpand.Count());
                             numOfInlinedCallsites.Add(reporter.callSitesToExpand.Count());
                             var splits = reporter.callSitesToExpand.Count().ToString() + "\n";
-                            //File.AppendAllText(toFile, splits);
+                            if (writeToStatsFile)
+                                File.AppendAllText(toFile, splits);
                             bool reporterContainsInlinedCallsites = false;
                             bool newCallsitesNotFound = true;
                             if (reporter.callSitesToExpand.Count == 0)
@@ -2098,7 +2102,8 @@ namespace CoreLib
                     numOfInlinedCallsites.Add(toRemove.Count());
                     //Console.WriteLine(clientID + " => inlined UW : " + toRemove.Count());
                     var splits = toRemove.Count().ToString() + "\n";
-                    //File.AppendAllText(toFile, splits);
+                    if (writeToStatsFile)
+                        File.AppendAllText(toFile, splits);
                 }
                 else if (verificationAlgorithm == "ucsplitparallel6") // Union of OR and UW open call sites
                 {
@@ -2106,7 +2111,8 @@ namespace CoreLib
                     //Console.WriteLine("call-sites inlined Union : " + unionCallsites.Count());
                     numOfInlinedCallsites.Add(unionCallsites.Count());
                     var splits = unionCallsites.Count().ToString() + "\n";
-                    //File.AppendAllText(toFile, splits);
+                    if (writeToStatsFile)
+                        File.AppendAllText(toFile, splits);
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach(var scs in unionCallsites)
@@ -2151,7 +2157,8 @@ namespace CoreLib
                     //Console.WriteLine("call-sites inlined Intersect : " + intersectCallsites.Count());
                     numOfInlinedCallsites.Add(intersectCallsites.Count());
                     var splits = intersectCallsites.Count().ToString() + "\n";
-                    //File.AppendAllText(toFile, splits);
+                    if (writeToStatsFile)
+                        File.AppendAllText(toFile, splits);
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     foreach (var scs in intersectCallsites)
@@ -3885,6 +3892,7 @@ namespace CoreLib
                     Console.WriteLine("HERE1");
                 Console.WriteLine(clientID + " => Outcome : " + outcome.ToString());
                 Console.WriteLine(clientID + " =>: " + totalIterationsUW + " <= UW iterations OR => " + totalIterationsOR);
+                Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                 if (outcome == Outcome.Correct)
                 {
                     //Console.WriteLine("OK");
