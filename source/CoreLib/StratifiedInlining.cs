@@ -1304,7 +1304,7 @@ namespace CoreLib
             bool learnProofs = false;
             bool writeToStatsFile = true;
             int maxSplitPerIteration = cba.Util.HydraConfig.maxSplitPerIteration;
-            int alpha = cba.Util.HydraConfig.alpha;
+            int alpha = 0;
             double lambda = cba.Util.HydraConfig.lambda;
             int initialUWIterations = cba.Util.HydraConfig.initialUWIterations;
             int numSplitThisIteration = 0;
@@ -1313,6 +1313,12 @@ namespace CoreLib
             bool isAlphaDecay = false;
             if (verificationAlgorithm == "ucsplitparallel8")
                 isAlphaDecay = true;
+            bool isAlphaStatic = false;
+            if(verificationAlgorithm == "ucsplitparallel9")
+            {
+                isAlphaStatic = true;
+                alpha = cba.Util.HydraConfig.alpha;
+            }
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
             //Console.ReadLine();
             //HashSet<string> previousSplitSites = new HashSet<string>();
@@ -1408,7 +1414,7 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8")
+                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1461,7 +1467,7 @@ namespace CoreLib
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8")
+                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9")
                             {
                                 //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                 var score = 0;
@@ -1858,6 +1864,23 @@ namespace CoreLib
                         Console.WriteLine(clientID + " => changing to OR");
                     }
                 }
+                if (isAlphaStatic)
+                {
+                    Random r = new Random();
+                    int randomNumber = r.Next(100);
+                    //Console.WriteLine(totalIterationsForAlpha + " => " + alpha);
+                    //choose which algorithm to execute based on alpha value
+                    if (randomNumber < alpha && verificationAlgorithm != "ucsplitparallel5")
+                    {
+                        verificationAlgorithm = "ucsplitparallel5";
+                        Console.WriteLine(clientID + " => changing to UW");
+                    }
+                    else if (randomNumber >= alpha && verificationAlgorithm != "ucsplitparallel")
+                    {
+                        verificationAlgorithm = "ucsplitparallel";
+                        Console.WriteLine(clientID + " => changing to OR");
+                    }
+                }
                 if (verificationAlgorithm == "ucsplitparallel")
                     totalIterationsOR += 1;
                 else if (verificationAlgorithm == "ucsplitparallel5")
@@ -1867,8 +1890,8 @@ namespace CoreLib
                 var callsitesUW = new List<StratifiedCallSite>();
                 // underapproximate query
                 //Console.WriteLine("Underapprox Begin");
-                if (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel")
-                {
+                //if (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel")
+                //{
                     Push();
                     foreach (StratifiedCallSite cs in openCallSites)
                     {
@@ -1947,7 +1970,7 @@ namespace CoreLib
                             }
                         }
                     }
-                }
+                //}
                 if (writeLog)
                     Console.WriteLine("point 3");
                 //Push();
@@ -1972,7 +1995,7 @@ namespace CoreLib
 
                 if (writeLog)
                     Console.WriteLine(clientID + " = point 5");
-                //if (verificationAlgorithm != "" ) 
+                //if (verificationAlgorithm != "" )
                 if (verificationAlgorithm != "ucsplitparallel5")
                 {
                     reporter.callSitesToExpand = new List<StratifiedCallSite>();
@@ -1981,7 +2004,7 @@ namespace CoreLib
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                     z3QueryTimes.Add(Tuple.Create((DateTime.Now - oqStartTime).TotalSeconds, 1));
-                    var toWrite = "ORQ," + (DateTime.Now - oqStartTime).TotalSeconds.ToString() + ",";
+                    toWrite = "ORQ," + (DateTime.Now - oqStartTime).TotalSeconds.ToString() + ",";
                     if (writeToStatsFile)
                         File.AppendAllText(toFile, toWrite);
                     Debug.WriteLine(outcome.ToString());
@@ -2061,7 +2084,7 @@ namespace CoreLib
                 }
 
                 //Add all open callsites in unsat core to list
-                if(ucore != null && (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8"))
+                if(ucore != null && (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7"))
                 {
                     foreach (var scs in openCallSites)
                     {
@@ -2201,6 +2224,12 @@ namespace CoreLib
                     Console.WriteLine("outcome " + outcome.ToString());
                     Console.WriteLine("callsitesUW.Count() => " + callsitesUW.Count());
                     Console.WriteLine("new callsites found => " + newCallSiteFound);
+                }
+                if(verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9")
+                {
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    Console.WriteLine("!!!!!ERROR!!!!!ERROR!!!!!ERROR!!!!!");
+                    Console.WriteLine("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                 }
                 //if (((verificationAlgorithm != "ucsplitparallel5" && verificationAlgorithm != "ucsplitparallel6" && verificationAlgorithm != "ucsplitparallel7") && outcome != Outcome.Errors) || ((verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7") && !newCallSiteFound))
                 // WHEN partition is SAFE : get new call tree
