@@ -1844,7 +1844,7 @@ namespace CoreLib
                 ucore = null;
                 boundHit = false;
                 bool newCallSiteFound = false;
-                var toFile = cba.Util.HydraConfig.fileName + "_stats.txt";
+                var toFile = cba.Util.HydraConfig.fileName + "_stats_" + clientID.ToString() + ".txt";
                 if (isAlphaDecay)
                 {
                     Random r = new Random();
@@ -1861,7 +1861,7 @@ namespace CoreLib
                     else if (randomNumber >= alpha && verificationAlgorithm != "ucsplitparallel")
                     {
                         verificationAlgorithm = "ucsplitparallel";
-                        Console.WriteLine(clientID + " => changing to OR");
+                        //Console.WriteLine(clientID + " => changing to OR");
                     }
                 }
                 if (isAlphaStatic)
@@ -1959,17 +1959,7 @@ namespace CoreLib
                     if (writeLog)
                         Console.WriteLine("point 2");
                     Pop();
-                    if (ucore != null && ucore.Count != 0)
-                    {
-
-                        foreach (StratifiedCallSite cs in attachedVC.Keys)
-                        {
-                            if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
-                            {
-                                CallSitesInUCore.Add(cs);
-                            }
-                        }
-                    }
+                    
                 //}
                 if (writeLog)
                     Console.WriteLine("point 3");
@@ -2027,7 +2017,18 @@ namespace CoreLib
 
                     if (outcome == Outcome.Errors)
                     {
-                        if(verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
+                        if (ucore != null && ucore.Count != 0)
+                        {
+
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
+                            }
+                        }
+                        if (verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7")
                         {
                             callsitesOR = reporter.callSitesToExpand;
                         }
@@ -2099,6 +2100,17 @@ namespace CoreLib
                 //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
                 if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
                 {
+                    if (ucore != null && ucore.Count != 0)
+                    {
+
+                        foreach (StratifiedCallSite cs in attachedVC.Keys)
+                        {
+                            if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                            {
+                                CallSitesInUCore.Add(cs);
+                            }
+                        }
+                    }
                     var toAdd = new HashSet<StratifiedCallSite>();
                     var toRemove = new HashSet<StratifiedCallSite>();
                     if (writeLog)
@@ -2294,8 +2306,8 @@ namespace CoreLib
                         {
                             if (decisions.Count == 0)
                             {
-                                Console.WriteLine(clientID + " => LocalStackEmpty");
-                                Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
+                                //Console.WriteLine(clientID + " => LocalStackEmpty");
+                                //Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                                 doneBT = true;
                                 break;
                             }
@@ -2331,8 +2343,11 @@ namespace CoreLib
                         //{
                         //    Console.WriteLine(clientID + " => New Decision");
                         //}
-                        Console.WriteLine(clientID + " => Popped From Local Stack");
-                        Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
+                        if (writeLog)
+                        {
+                            Console.WriteLine(clientID + " => Popped From Local Stack");
+                            Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
+                        }
                         if (topDecision.decisionType == DecisionType.MUST_REACH)
                         {
                             // Block
@@ -3921,7 +3936,7 @@ namespace CoreLib
                     Console.WriteLine("HERE1");
                 Console.WriteLine(clientID + " => Outcome : " + outcome.ToString());
                 Console.WriteLine(clientID + " =>: " + totalIterationsUW + " <= UW iterations OR => " + totalIterationsOR);
-                Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
+                //Console.WriteLine(clientID + " => " + z3QueryTimes.Count() + " " + numOfInlinedCallsites.Count());
                 if (outcome == Outcome.Correct)
                 {
                     //Console.WriteLine("OK");
