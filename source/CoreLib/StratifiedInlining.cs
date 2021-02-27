@@ -1313,6 +1313,13 @@ namespace CoreLib
             bool isAlphaDecay = false;
             if (verificationAlgorithm == "ucsplitparallel8")
                 isAlphaDecay = true;
+            bool isFractionUnsatCore = false;
+            if (verificationAlgorithm == "ucsplitparallel10")
+            {
+                // alpha will now become the fraction of callsites to be inlined
+                isFractionUnsatCore = true;
+                alpha = cba.Util.HydraConfig.alpha;
+            }
             bool isAlphaStatic = false;
             if(verificationAlgorithm == "ucsplitparallel9")
             {
@@ -1414,7 +1421,7 @@ namespace CoreLib
                 var size = di.ComputeSize();
                 int splitFlag = 0;
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
-                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9")
+                if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9" || verificationAlgorithm == "ucsplitparallel10")
                 {
                     splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
@@ -1467,7 +1474,7 @@ namespace CoreLib
                                 toRemove.Add(vc);
                                 continue;
                             }
-                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9")
+                            if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9" || verificationAlgorithm == "ucsplitparallel10")
                             {
                                 //Console.WriteLine("SPLITTING ON UNSAT CORE");
                                 var score = 0;
@@ -1881,6 +1888,10 @@ namespace CoreLib
                         Console.WriteLine(clientID + " => changing to OR");
                     }
                 }
+                if(isFractionUnsatCore)
+                {
+                    verificationAlgorithm = "ucsplitparallel5";
+                }
                 if (verificationAlgorithm == "ucsplitparallel")
                     totalIterationsOR += 1;
                 else if (verificationAlgorithm == "ucsplitparallel5")
@@ -2085,7 +2096,7 @@ namespace CoreLib
                 }
 
                 //Add all open callsites in unsat core to list
-                if(ucore != null && (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7"))
+                if(ucore != null && (verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel10"))
                 {
                     foreach (var scs in openCallSites)
                     {
@@ -2097,8 +2108,64 @@ namespace CoreLib
                 }
                 if (writeLog)
                     Console.WriteLine(clientID + " = point 6");
-                //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
-                if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct)
+
+                if (isFractionUnsatCore)
+                {
+                    if (ucore != null && ucore.Count != 0)
+                    {
+
+                        foreach (StratifiedCallSite cs in attachedVC.Keys)
+                        {
+                            if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                            {
+                                CallSitesInUCore.Add(cs);
+                            }
+                        }
+                    }
+                    var toAdd = new HashSet<StratifiedCallSite>();
+                    var toRemove = new HashSet<StratifiedCallSite>();
+                    if (writeLog)
+                        Console.WriteLine("UNSAT CORE Inlined Callsites");
+                    var callsitesUWFraction = new List<StratifiedCallSite>();
+                    //Get count of callsites to be inlined
+                    int toBeInlinedCount = (int) (callsitesUW.Count * ((double)alpha / 100.0));
+                    Console.WriteLine(callsitesUW.Count + " <= to be inlined  alpha => " + alpha);
+                    if (toBeInlinedCount > 0)
+                    {
+                        Random r = new Random();
+                        var callsitesUWCopy = new HashSet<StratifiedCallSite>(callsitesUW);
+                        for (int iter = 0; iter < toBeInlinedCount; iter++)
+                        {
+                            // Select 1 callsite and remove it from the list (no duplicates)
+                            var callsite = callsitesUWCopy.ElementAt(r.Next(callsitesUWCopy.Count));
+                            callsitesUWFraction.Add(callsite);
+                            callsitesUWCopy.Remove(callsite);
+                        }
+                       //Console.WriteLine(callsitesUW.Count + " total fraction " + callsitesUWFraction.Count);
+                    }
+                    else
+                    {
+                        callsitesUWFraction = callsitesUW;
+                        //Console.WriteLine(callsitesUW.Count + " all in ucore");
+                    }
+                    var splits = callsitesUWFraction.Count().ToString() + "\n";
+                    if (writeToStatsFile)
+                        File.AppendAllText(toFile, splits);
+                    foreach (var scs in callsitesUWFraction)
+                    {
+                        calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                        toRemove.Add(scs);
+                        newCallSiteFound = true;
+                        var svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                        //prover.Assert(scs.callSiteExpr, true, name: "label_" + scs.callSiteExpr.ToString());
+                        if (svc != null)
+                            toAdd.UnionWith(svc.CallSites);
+                    }
+                    //Update OpenCallSites
+                    openCallSites.ExceptWith(toRemove);
+                    openCallSites.UnionWith(toAdd);
+                }
+                else if (verificationAlgorithm == "ucsplitparallel5" && ucore != null && outcome == Outcome.Correct) //UNDERAPPROX WIDENING : Inline all Callsites present in UNSAT core which are not inlined already
                 {
                     if (ucore != null && ucore.Count != 0)
                     {
@@ -2230,6 +2297,7 @@ namespace CoreLib
                     openCallSites.ExceptWith(toRemove);
                     openCallSites.UnionWith(toAdd);
                 }
+                
                 if (writeLog)
                 {
                     Console.WriteLine("verificationAlgorithm => " + verificationAlgorithm);
