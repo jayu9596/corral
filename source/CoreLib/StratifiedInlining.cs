@@ -1896,6 +1896,10 @@ namespace CoreLib
                     totalIterationsOR += 1;
                 else if (verificationAlgorithm == "ucsplitparallel5")
                     totalIterationsUW += 1;
+                DateTime timeNow = DateTime.Now;
+                var timeToWrite = "time," + timeNow.ToString("dd/MM HH:mm:ss.ffffff") + "\n";
+                if(writeToStatsFile)
+                    File.AppendAllText(toFile, timeToWrite);
                 totalIterations += 1;
                 var callsitesOR = new List<StratifiedCallSite>();
                 var callsitesUW = new List<StratifiedCallSite>();
@@ -1931,7 +1935,7 @@ namespace CoreLib
                     DateTime uqStartTime = DateTime.Now;
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("UNDERAPPROX QUERY TIME = " + (DateTime.Now - uqStartTime).TotalSeconds);
-                    var toWrite = "UWQ," + (DateTime.Now - uqStartTime).TotalSeconds.ToString() + ",";
+                    var toWrite = "UWQ," + (DateTime.Now - uqStartTime).TotalSeconds.ToString() + "\n";
                     if (writeToStatsFile)
                         File.AppendAllText(toFile, toWrite);
                     z3QueryTimes.Add(Tuple.Create((DateTime.Now - uqStartTime).TotalSeconds, 0));
@@ -2005,7 +2009,7 @@ namespace CoreLib
                     outcome = CheckVC(reporter);
                     Debug.WriteLine("OVERAPPROX QUERY TIME = " + (DateTime.Now - oqStartTime).TotalSeconds);
                     z3QueryTimes.Add(Tuple.Create((DateTime.Now - oqStartTime).TotalSeconds, 1));
-                    toWrite = "ORQ," + (DateTime.Now - oqStartTime).TotalSeconds.ToString() + ",";
+                    toWrite = "ORQ," + (DateTime.Now - oqStartTime).TotalSeconds.ToString() + "\n";
                     if (writeToStatsFile)
                         File.AppendAllText(toFile, toWrite);
                     Debug.WriteLine(outcome.ToString());
@@ -2129,7 +2133,7 @@ namespace CoreLib
                     var callsitesUWFraction = new List<StratifiedCallSite>();
                     //Get count of callsites to be inlined
                     int toBeInlinedCount = (int) (callsitesUW.Count * ((double)alpha / 100.0));
-                    Console.WriteLine(callsitesUW.Count + " <= to be inlined  alpha => " + alpha);
+                    //Console.WriteLine(callsitesUW.Count + " <= to be inlined  alpha => " + alpha);
                     if (toBeInlinedCount > 0)
                     {
                         Random r = new Random();
