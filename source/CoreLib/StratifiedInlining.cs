@@ -1310,6 +1310,7 @@ namespace CoreLib
             int numSplitThisIteration = 0;
             int aggressiveSplitQueryBound = 5;
             string verificationAlgorithm = cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower();
+            var prevUnsatCoreCallsites = new HashSet<StratifiedCallSite>();
             bool isAlphaDecay = false;
             if (verificationAlgorithm == "ucsplitparallel8")
                 isAlphaDecay = true;
@@ -2138,6 +2139,8 @@ namespace CoreLib
                     {
                         Random r = new Random();
                         var callsitesUWCopy = new HashSet<StratifiedCallSite>(callsitesUW);
+                        var toRemoveUnsatCore = new HashSet<StratifiedCallSite>();
+                        var toAddUnsatCore = new HashSet<StratifiedCallSite>();
                         for (int iter = 0; iter < toBeInlinedCount; iter++)
                         {
                             // Select 1 callsite and remove it from the list (no duplicates)
@@ -2145,13 +2148,32 @@ namespace CoreLib
                             callsitesUWFraction.Add(callsite);
                             callsitesUWCopy.Remove(callsite);
                         }
-                       //Console.WriteLine(callsitesUW.Count + " total fraction " + callsitesUWFraction.Count);
+                        foreach (var scs in callsitesUWCopy)
+                        {
+                            if (prevUnsatCoreCallsites.Contains(scs))
+                            {
+                                callsitesUWFraction.Add(scs);
+                                toRemoveUnsatCore.Add(scs);
+                            }
+                            else
+                            {
+                                toAddUnsatCore.Add(scs);
+                            }
+                        }
+                        Console.WriteLine(toRemoveUnsatCore.Count + " inlined extra from " + callsitesUWCopy.Count);
+
+                        //Update UnsatCoreCallsites
+                        prevUnsatCoreCallsites.ExceptWith(toRemoveUnsatCore);
+                        prevUnsatCoreCallsites.UnionWith(toAddUnsatCore);
+                        //Console.WriteLine(callsitesUW.Count + " total fraction " + callsitesUWFraction.Count);
+                        Console.WriteLine("Adding " + toAddUnsatCore.Count + " to unsat core list to " + prevUnsatCoreCallsites.Count);
                     }
                     else
                     {
                         callsitesUWFraction = callsitesUW;
                         //Console.WriteLine(callsitesUW.Count + " all in ucore");
                     }
+
                     var splits = callsitesUWFraction.Count().ToString() + "\n";
                     if (writeToStatsFile)
                         File.AppendAllText(toFile, splits);
