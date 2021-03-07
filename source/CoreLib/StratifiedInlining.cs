@@ -2160,13 +2160,13 @@ namespace CoreLib
                                 toAddUnsatCore.Add(scs);
                             }
                         }
-                        Console.WriteLine(toRemoveUnsatCore.Count + " inlined extra from " + callsitesUWCopy.Count);
+                        //Console.WriteLine(toRemoveUnsatCore.Count + " inlined extra from " + callsitesUWCopy.Count);
 
                         //Update UnsatCoreCallsites
                         prevUnsatCoreCallsites.ExceptWith(toRemoveUnsatCore);
                         prevUnsatCoreCallsites.UnionWith(toAddUnsatCore);
                         //Console.WriteLine(callsitesUW.Count + " total fraction " + callsitesUWFraction.Count);
-                        Console.WriteLine("Adding " + toAddUnsatCore.Count + " to unsat core list to " + prevUnsatCoreCallsites.Count);
+                        //Console.WriteLine("Adding " + toAddUnsatCore.Count + " to unsat core list to " + prevUnsatCoreCallsites.Count);
                     }
                     else
                     {
