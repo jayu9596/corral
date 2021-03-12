@@ -1899,32 +1899,33 @@ namespace CoreLib
                     if (outcome == Outcome.Errors)
                     {
                         foreach (var scs in reporter.callSitesToExpand)
-		                {                         
-		                    calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
+                        {
+                            calltreeToSend = calltreeToSend + GetPersistentID(scs) + ",";
 
-		                    openCallSites.Remove(scs);
-		                    StratifiedVC svc = null;
-		                    if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
-		                        svc = Expand(scs);
-		                    else
-		                        svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
-		                    if (svc != null)
-		                    {
-		                        openCallSites.UnionWith(svc.CallSites);
-		                        Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
-		                    }
-		                }
-		                if (ucore != null || ucore.Count != 0)
-		                {
+                            openCallSites.Remove(scs);
+                            StratifiedVC svc = null;
+                            if (cba.Util.BoogieVerify.options.newStratifiedInliningAlgo.ToLower() == "ucsplitparallel2")    //Do not assert labels for inlined callsites. Unsat core should contain only open callsites
+                                svc = Expand(scs);
+                            else
+                                svc = Expand(scs, "label_" + scs.callSiteExpr.ToString(), true, true);
+                            if (svc != null)
+                            {
+                                openCallSites.UnionWith(svc.CallSites);
+                                Debug.Assert(!cba.Util.BoogieVerify.options.useFwdBck);
+                            }
+                        }
+                        if (ucore != null || ucore.Count != 0)
+                        {
 
-		                    foreach (StratifiedCallSite cs in attachedVC.Keys)
-		                    {
-		                        if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
-		                        {
-		                            CallSitesInUCore.Add(cs);
-		                        }
-		                    }
-		                }
+                            foreach (StratifiedCallSite cs in attachedVC.Keys)
+                            {
+                                if (ucore.Contains("label_" + cs.callSiteExpr.ToString()))
+                                {
+                                    CallSitesInUCore.Add(cs);
+                                }
+                            }
+                        }
+                    }
                 }
                 else // verificationAlgorithm == "ucsplitparallel5"
                 {
