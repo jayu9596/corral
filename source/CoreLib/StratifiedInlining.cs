@@ -1236,7 +1236,7 @@ namespace CoreLib
             return outcome;
         }
 
-        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand)
+        int checkSplit(List<StratifiedCallSite> CallSitesInUCore, HashSet<string> previousSplitSites, bool splitOnDemand, bool newSplitHeuristic,int callsitesInlinedCurrentPartition, int alpha)
         {
             int splitFlag = 0;
             if (CallSitesInUCore.Count != 0)
@@ -1258,6 +1258,25 @@ namespace CoreLib
                     //}
                     if (reply.Equals("NO"))
                         splitFlag = 0;
+                }
+
+                // Added new heuristic for splitting
+                // split if alpha number of callsites are inlined or if any client is waiting
+                if (newSplitHeuristic)
+                {
+                    if (callsitesInlinedCurrentPartition >= alpha)
+                        splitFlag = 1;
+                    else
+                    {
+                        string reply = sendRequestToServer("SplitNow", "IsThereAnyWaitingClient");
+                        if (reply.Equals("NO"))
+                            splitFlag = 0;
+                        else
+                        {
+                            splitFlag = 1;
+                            //Console.WriteLine(clientID + " => Spliiting due to client waiting");
+                        }
+                    }
                 }
             }
             return splitFlag;
@@ -1325,6 +1344,14 @@ namespace CoreLib
             if(verificationAlgorithm == "ucsplitparallel9")
             {
                 isAlphaStatic = true;
+                alpha = cba.Util.HydraConfig.alpha;
+            }
+            bool newSplitHeuristic = false;
+            int callsitesInlinedCurrentPartition = 0;
+            if (verificationAlgorithm == "ucsplitparallel11")
+            {
+                // alpha will become required callsites to inline before split
+                newSplitHeuristic = true;
                 alpha = cba.Util.HydraConfig.alpha;
             }
             //Console.WriteLine("recursion bound : " + CommandLineOptions.Clo.RecursionBound);
@@ -1424,7 +1451,7 @@ namespace CoreLib
                 Dictionary<StratifiedCallSite, int> UCoreChildrenCount = new Dictionary<StratifiedCallSite, int>();
                 if (verificationAlgorithm == "ucsplitparallel" || verificationAlgorithm == "ucsplitparallel2" || verificationAlgorithm == "ucsplitparallel5" || verificationAlgorithm == "ucsplitparallel6" || verificationAlgorithm == "ucsplitparallel7" || verificationAlgorithm == "ucsplitparallel8" || verificationAlgorithm == "ucsplitparallel9" || verificationAlgorithm == "ucsplitparallel10")
                 {
-                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand);
+                    splitFlag = checkSplit(CallSitesInUCore, previousSplitSites, splitOnDemand, newSplitHeuristic, callsitesInlinedCurrentPartition, alpha);//Added condition that callsitesInlined must be greater than alpha
                     if (CallSitesInUCore.Count != 0 && splitFlag == 1)
                     {
                         foreach (StratifiedCallSite cs in CallSitesInUCore)
@@ -1453,10 +1480,9 @@ namespace CoreLib
                         }
                     }
                     if (((treesize == 0 && size > 2) || (treesize != 0 && size > treesize + 2)) && splitFlag == 1
-                    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval)
+                    && (DateTime.Now - lastSplitAt).TotalSeconds >= nextSplitInterval) 
                     {
                         var st = DateTime.Now;
-
                         // find a node to split on
                         StratifiedVC maxVc = null;
                         double maxVcScore = 0;
@@ -1521,6 +1547,7 @@ namespace CoreLib
 
                         if (maxVc != null)
                         {
+                            Console.WriteLine(clientID + " => callsites count before spliiting " + callsitesInlinedCurrentPartition);
                             //Console.WriteLine("SCORE : {0}, INTERVAL : {1}, TIME : {2}", maxVcScore, nextSplitInterval, (DateTime.Now - lastSplitAt).TotalSeconds);
                             toRemove.Iter(vc => attachedVCInv.Remove(vc));
                             UCsplit += 1;
@@ -1889,14 +1916,16 @@ namespace CoreLib
                         Console.WriteLine(clientID + " => changing to OR");
                     }
                 }
-                if(isFractionUnsatCore)
+                if(isFractionUnsatCore || newSplitHeuristic)
                 {
                     verificationAlgorithm = "ucsplitparallel5";
                 }
+
                 if (verificationAlgorithm == "ucsplitparallel")
                     totalIterationsOR += 1;
                 else if (verificationAlgorithm == "ucsplitparallel5")
                     totalIterationsUW += 1;
+
                 DateTime timeNow = DateTime.Now;
                 var timeToWrite = "time," + timeNow.ToString("dd/MM HH:mm:ss.ffffff") + "\n";
                 if(writeToStatsFile)
@@ -2232,6 +2261,8 @@ namespace CoreLib
                     var splits = toRemove.Count().ToString() + "\n";
                     if (writeToStatsFile)
                         File.AppendAllText(toFile, splits);
+                    //if (newSplitHeuristic)
+                        callsitesInlinedCurrentPartition += toRemove.Count();
                 }
                 else if (verificationAlgorithm == "ucsplitparallel6") // Union of OR and UW open call sites
                 {
@@ -2426,6 +2457,11 @@ namespace CoreLib
                             Console.WriteLine(clientID +" => " + totalIterationsForAlpha + " iterations changed to => " + topDecision.totalIterationsForAlpha);
                         if (isAlphaDecay)
                             totalIterationsForAlpha = topDecision.totalIterationsForAlpha;
+                        //if (newSplitHeuristic)
+                        //{
+                            Console.WriteLine(clientID + " => callsites count " + callsitesInlinedCurrentPartition);
+                            callsitesInlinedCurrentPartition = 0;
+                        //}
                         //timeGraph.Pop(npops - 1);
 
                         // flip the decision
